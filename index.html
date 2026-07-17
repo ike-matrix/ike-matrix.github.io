@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e9e0cf">
+<title>Ike</title>
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Nunito:wght@400;600;700;800&display=swap">
+<style>
+:root{
+  --bg:#e9e0cf; --bg-2:#e2d7c1; --surface:#f6efe1; --surface-2:#fcf8ef;
+  --ink:#382f26; --ink-2:#6c5f4e; --muted:#998a6f; --line:#d9cbb1;
+  --clay:#c1765a; --clay-tint:#eed4c8; --sage:#869a64; --sage-tint:#d8e0c3;
+  --ochre:#c79e49; --dusk:#6f8d85; --plum:#a07f8a;
+  --r:18px;
+  --shadow:0 1px 0 rgba(255,255,255,.5), 0 10px 24px -16px rgba(56,47,38,.55);
+  --hard:3px 3px 0 rgba(56,47,38,.18);
+  --hard-active:1px 1px 0 rgba(56,47,38,.18);
+  --dot:rgba(56,47,38,.05);
+}
+:root[data-theme="dark"]{
+  --bg:#211c16; --bg-2:#2a241c; --surface:#2e271e; --surface-2:#362e23;
+  --ink:#ece3d2; --ink-2:#c3b49b; --muted:#8c7d66; --line:#463d2f;
+  --clay:#d4876b; --clay-tint:#4a3328; --sage:#9aac7a; --sage-tint:#39432a;
+  --ochre:#d4b264; --dusk:#82a39a; --plum:#b594a0;
+  --shadow:0 1px 0 rgba(255,255,255,.04), 0 12px 26px -16px rgba(0,0,0,.7);
+  --hard:3px 3px 0 rgba(236,227,210,.13);
+  --hard-active:1px 1px 0 rgba(236,227,210,.13);
+  --dot:rgba(236,227,210,.045);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:"Nunito",system-ui,-apple-system,sans-serif;
+  color:var(--ink); background:var(--bg);
+  background-image:radial-gradient(var(--dot) 1.1px, transparent 1.2px);
+  background-size:18px 18px; -webkit-font-smoothing:antialiased;
+  font-size:15.5px; line-height:1.45;
+  padding:0 16px calc(24px + env(safe-area-inset-bottom,0px));
+  max-width:72rem; margin:0 auto;
+}
+button{font:inherit; color:inherit; background:none; border:none; cursor:pointer; padding:0}
+.label{font-weight:800; color:var(--ink-2); text-transform:uppercase; letter-spacing:1.4px; font-size:.72rem}
+
+/* ---------- buttons ---------- */
+.btn{
+  border:none; cursor:pointer; font:inherit; font-weight:800; border-radius:14px;
+  padding:12px 18px; color:var(--surface-2); background:var(--ink); letter-spacing:.2px;
+  box-shadow:var(--hard); transition:transform .08s, box-shadow .08s, opacity .15s;
+}
+.btn:active{transform:translate(2px,2px); box-shadow:var(--hard-active)}
+.btn--ghost{background:var(--surface-2); color:var(--ink); border:1.5px solid var(--line)}
+.icon-btn{
+  border:1.5px solid var(--line); width:42px; height:42px; flex:0 0 auto; border-radius:13px;
+  background:var(--surface-2); color:var(--ink); font-size:1.05rem; display:grid; place-items:center;
+  box-shadow:var(--hard); transition:transform .08s, box-shadow .08s;
+}
+.icon-btn:active{transform:translate(2px,2px); box-shadow:var(--hard-active)}
+
+/* ---------- header ---------- */
+header{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:26px 2px 16px}
+header h1{font-family:"Fraunces",Baskerville,Georgia,serif; font-weight:650; font-size:2.2rem; margin:0 auto 0 0; letter-spacing:-1px}
+header h1 .dot{color:var(--clay)}
+details.menu{position:relative}
+details.menu>summary{
+  list-style:none; cursor:pointer; border:1.5px solid var(--line); border-radius:13px;
+  padding:0 14px; height:42px; display:flex; align-items:center; gap:6px;
+  background:var(--surface-2); color:var(--ink); font-weight:800; font-size:.86rem;
+  box-shadow:var(--hard); transition:transform .08s, box-shadow .08s;
+}
+details.menu>summary:active{transform:translate(2px,2px); box-shadow:var(--hard-active)}
+details.menu>summary::-webkit-details-marker{display:none}
+details.menu>.panel{
+  position:absolute; right:0; top:calc(100% + 6px); z-index:30;
+  background:var(--surface); border:1.5px solid var(--line); border-radius:14px;
+  padding:6px; min-width:12rem; display:flex; flex-direction:column; gap:2px; box-shadow:var(--shadow);
+}
+.panel button{
+  text-align:left; padding:10px 12px; border-radius:10px; min-height:44px; font-weight:700;
+  display:flex; align-items:center; gap:8px; transition:background .12s;
+}
+.panel button:hover{background:var(--surface-2)}
+.panel button[aria-current="true"]{background:var(--surface-2)}
+
+/* ---------- matrix ---------- */
+#matrix{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+.quadrant{
+  position:relative; overflow:hidden; background:var(--surface);
+  border:1.5px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow);
+  padding:16px 16px 16px 22px; min-height:10rem;
+}
+.quadrant::before{content:""; position:absolute; left:0; top:0; bottom:0; width:7px; background:var(--accent)}
+#q1{--accent:var(--clay)} #q2{--accent:var(--ochre)} #q3{--accent:var(--dusk)} #q4{--accent:var(--muted)}
+.quadrant>summary{
+  list-style:none; cursor:pointer; display:flex; align-items:baseline; gap:10px; min-height:28px;
+}
+.quadrant>summary::-webkit-details-marker{display:none}
+.quadrant>summary .qname{font-family:"Fraunces",Baskerville,Georgia,serif; font-weight:650; font-size:1.25rem}
+.quadrant>summary .count{margin-left:auto; color:var(--muted); font-weight:800; font-size:.85rem}
+.cards{display:flex; flex-direction:column; gap:10px; padding-top:12px; min-height:1.6rem}
+
+#unsortedWrap{
+  grid-column:1/-1; border:2px dashed var(--line); border-radius:var(--r); padding:14px 16px 16px;
+}
+#unsortedWrap>.label{display:block; margin-bottom:2px}
+#unsortedWrap .cards{flex-direction:row; flex-wrap:wrap; align-items:flex-start}
+#unsortedWrap .card{max-width:22rem}
+#unsortedWrap[hidden]{display:none}
+
+/* zoom */
+#matrix.zoomed{display:flex; flex-direction:column}
+#matrix.zoomed .quadrant:not(.zoom-active){min-height:0; padding-top:10px; padding-bottom:10px; box-shadow:none}
+#matrix.zoomed .quadrant:not(.zoom-active)>.cards{display:none}
+#matrix.zoomed .quadrant.zoom-active{order:-1; min-height:24rem}
+#matrix.zoomed #unsortedWrap{order:1}
+
+/* ---------- cards ---------- */
+.card{
+  background:var(--surface-2); border:1.5px solid var(--line); border-radius:14px;
+  padding:10px 12px; transition:opacity .15s, background .15s, box-shadow .15s; position:relative;
+}
+.card.dragging{opacity:.6; box-shadow:0 14px 30px -12px rgba(56,47,38,.6)}
+.card.dim{opacity:.3}
+.card.nest-hl{outline:2px solid var(--sage); outline-offset:-1px; background:var(--sage-tint)}
+.card.ins-before{box-shadow:0 -4px 0 0 var(--sage)}
+.card.ins-after{box-shadow:0 4px 0 0 var(--sage)}
+.cards.zone-hl{outline:2px dashed var(--sage); outline-offset:3px; border-radius:10px}
+.cardline{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.star{color:var(--ochre)}
+.title{overflow-wrap:anywhere; font-weight:700}
+.chip{
+  font-size:.7rem; font-weight:800; border-radius:99px; padding:3px 10px; white-space:nowrap;
+  text-transform:uppercase; letter-spacing:.5px;
+}
+.chip.clay{background:var(--clay-tint); color:var(--clay)}
+.chip.sage{background:var(--sage-tint); color:var(--sage)}
+.chip.ochre{background:color-mix(in srgb,var(--ochre) 22%,transparent); color:var(--ochre)}
+.chip.dusk{background:color-mix(in srgb,var(--dusk) 22%,transparent); color:var(--dusk)}
+.chip.plum{background:color-mix(in srgb,var(--plum) 22%,transparent); color:var(--plum)}
+.deadline{font-size:.78rem; color:var(--muted); font-weight:800; white-space:nowrap}
+.deadline.soon{color:var(--clay)}
+.noteglyph{color:var(--muted); font-size:.8rem; font-weight:800}
+.acts{margin-left:auto; display:flex; gap:5px; opacity:0; transition:opacity .12s}
+.card:hover>.cardline>.acts, .card:focus-within>.cardline>.acts{opacity:1}
+@media (hover:none), (max-width:700px){ .acts{opacity:1} }
+.acts button{
+  min-width:32px; min-height:30px; border-radius:10px; color:var(--ink-2);
+  border:1.5px solid var(--line); background:var(--surface);
+  display:inline-flex; align-items:center; justify-content:center;
+  transition:background .12s, color .12s, transform .08s;
+}
+@media (pointer:coarse){ .acts button{min-width:44px; min-height:44px} }
+.acts button:hover{background:var(--sage-tint); color:var(--ink)}
+.acts button:active{transform:scale(.92)}
+.ck svg{width:15px; height:15px}
+.ck path{stroke-dasharray:15; stroke-dashoffset:0}
+.card.completing{opacity:0; transition:opacity .15s .18s}
+.card.completing .ck path{animation:draw .18s ease-out}
+@keyframes draw{from{stroke-dashoffset:15}to{stroke-dashoffset:0}}
+
+/* subtasks */
+details.subs{margin-top:6px}
+details.subs>summary{
+  list-style:none; cursor:pointer; font-size:.74rem; font-weight:800; color:var(--muted);
+  display:inline-flex; align-items:center; gap:5px; min-height:24px;
+  text-transform:uppercase; letter-spacing:.5px;
+}
+details.subs>summary::-webkit-details-marker{display:none}
+details.subs>summary .tri{display:inline-block; font-size:.7em}
+details.subs[open]>summary .tri{rotate:90deg}
+.sublist{display:flex; flex-direction:column; gap:2px; margin:6px 0 0 8px; border-left:2px solid var(--line); padding-left:10px}
+.card.sub{border:none; background:none; padding:3px 0; border-radius:0}
+.card.sub .cardline{flex-wrap:nowrap}
+.card.sub .title{font-weight:600}
+.card.sub.done .title{text-decoration:line-through; color:var(--muted)}
+.addsub{
+  font:inherit; font-size:.85rem; font-weight:600; margin:8px 0 0 20px; border:none;
+  border-bottom:1.5px solid var(--line); background:none; color:var(--ink); padding:5px 0; width:70%;
+}
+.addsub::placeholder{color:var(--muted)}
+.addsub:focus{outline:none; border-bottom-color:var(--ochre)}
+
+/* ---------- move menu ---------- */
+#moveMenu{
+  position:fixed; margin:0; inset:auto; background:var(--surface); border:1.5px solid var(--line);
+  border-radius:14px; padding:6px; display:none; flex-direction:column; gap:2px; z-index:40;
+  box-shadow:var(--shadow); color:var(--ink);
+}
+#moveMenu:popover-open{display:flex}
+#moveMenu button{text-align:left; padding:10px 14px; border-radius:10px; min-height:44px; font-weight:700; transition:background .12s}
+#moveMenu button:hover{background:var(--surface-2)}
+
+/* ---------- dialog ---------- */
+dialog{
+  border:1.5px solid var(--line); border-radius:var(--r); background:var(--surface); color:var(--ink);
+  padding:22px 20px 18px; width:min(26rem,92vw); box-shadow:var(--shadow);
+}
+dialog::backdrop{background:rgba(56,47,38,.45)}
+dialog form{display:flex; flex-direction:column; gap:14px}
+dialog input[type=text], dialog input[type=date], dialog textarea{
+  font:inherit; background:var(--surface-2); border:1.5px solid var(--line); border-radius:12px;
+  padding:11px 14px; color:var(--ink); width:100%; resize:vertical;
+}
+dialog input:focus, dialog textarea:focus{
+  outline:none; border-color:var(--ochre); box-shadow:0 0 0 3px color-mix(in srgb,var(--ochre) 22%,transparent);
+}
+dialog textarea{min-height:4.2rem}
+.togglerow{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.tgl{
+  border:1.5px solid var(--line); border-radius:99px; padding:8px 16px; min-height:38px;
+  font-weight:800; color:var(--ink-2); background:var(--surface-2);
+  transition:background .15s, color .15s, border-color .15s, transform .08s;
+}
+.tgl:active{transform:scale(.95)}
+.tgl[aria-pressed="true"]{background:var(--sage); border-color:var(--sage); color:#0f201d}
+:root[data-theme="dark"] .tgl[aria-pressed="true"]{color:#141810}
+#quadHint{font-size:.82rem; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-top:6px}
+#clearFlags{color:var(--muted); font-size:.78rem; font-weight:800; text-decoration:underline}
+.dlgfoot{display:flex; align-items:center; gap:10px; margin-top:4px}
+.dlgfoot .primary{flex:1}
+#dlgCancel{flex:1}
+#dlgDelete{
+  border:1.5px solid var(--clay); color:var(--clay); background:var(--surface-2);
+  border-radius:14px; padding:12px 14px; font-weight:800;
+}
+label.field{display:flex; flex-direction:column; gap:6px; font-weight:800; font-size:.74rem;
+  text-transform:uppercase; letter-spacing:1px; color:var(--ink-2)}
+label.starlabel{flex-direction:row; align-items:center; gap:8px; font-size:.95rem; letter-spacing:0;
+  text-transform:none; color:var(--ink); font-weight:700}
+label.starlabel input{width:18px; height:18px; accent-color:var(--ochre)}
+
+/* ---------- archive ---------- */
+#archive h2{font-family:"Fraunces",Baskerville,Georgia,serif; font-weight:650; font-size:1.6rem; margin:6px 0 14px}
+#archive .month{margin:20px 4px 10px}
+#archiveList .arow{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  background:var(--surface); border:1.5px solid var(--line); border-radius:14px;
+  padding:12px 14px; box-shadow:var(--shadow); margin-bottom:10px;
+}
+.arow .title{font-weight:700}
+.arow .qtag{font-weight:800; font-size:.68rem; text-transform:uppercase; letter-spacing:.5px; color:var(--muted)}
+.arow .when{color:var(--muted); font-weight:700; font-size:.83rem; margin-left:auto; white-space:nowrap;
+  display:flex; align-items:center; gap:10px}
+.arow button{color:var(--ink-2); font-weight:800; text-decoration:underline; min-height:32px}
+#archive .empty{text-align:center; color:var(--muted); font-weight:700; padding:30px 10px}
+
+/* ---------- footer ---------- */
+footer{margin-top:22px}
+.data-actions{display:flex; gap:10px}
+.data-actions .btn{flex:1; padding:11px; font-size:.9rem}
+#msg{display:block; text-align:center; color:var(--clay); font-weight:800; font-size:.8rem; min-height:1.2em; padding-top:4px}
+
+/* ---------- narrow ---------- */
+@media (max-width:700px){
+  #matrix{display:flex; flex-direction:column}
+  body{padding-left:12px; padding-right:12px}
+  header h1{font-size:1.8rem}
+  .data-actions{flex-wrap:wrap}
+  .data-actions .btn{flex:1 1 40%}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Ike<span class="dot">.</span></h1>
+  <button class="btn" id="newBtn">+ New task</button>
+  <details class="menu" id="tagMenu">
+    <summary id="tagMenuLabel">All tags</summary>
+    <div class="panel" id="tagPanel"></div>
+  </details>
+  <details class="menu" id="quadMenu">
+    <summary>Q ▾</summary>
+    <div class="panel" id="quadPanel">
+      <button data-zoom="">All quadrants</button>
+      <button data-zoom="q1">Q1 · Urgent &amp; Important</button>
+      <button data-zoom="q2">Q2 · Important</button>
+      <button data-zoom="q3">Q3 · Urgent</button>
+      <button data-zoom="q4">Q4 · Neither</button>
+    </div>
+  </details>
+  <button class="icon-btn" id="darkBtn" aria-label="Toggle dark mode">◐</button>
+</header>
+
+<main id="matrix">
+  <details class="quadrant" id="q1" open>
+    <summary><span class="qname">Q1 · Urgent &amp; Important</span><span class="count"></span></summary>
+    <div class="cards" data-zone="q1"></div>
+  </details>
+  <details class="quadrant" id="q2" open>
+    <summary><span class="qname">Q2 · Important</span><span class="count"></span></summary>
+    <div class="cards" data-zone="q2"></div>
+  </details>
+  <details class="quadrant" id="q3" open>
+    <summary><span class="qname">Q3 · Urgent</span><span class="count"></span></summary>
+    <div class="cards" data-zone="q3"></div>
+  </details>
+  <details class="quadrant" id="q4" open>
+    <summary><span class="qname">Q4 · Neither</span><span class="count"></span></summary>
+    <div class="cards" data-zone="q4"></div>
+  </details>
+  <section id="unsortedWrap" hidden>
+    <span class="label">Unsorted</span>
+    <div class="cards" data-zone="un"></div>
+  </section>
+</main>
+
+<section id="archive" hidden>
+  <h2>Archive</h2>
+  <div id="archiveList"></div>
+</section>
+
+<footer>
+  <div class="data-actions">
+    <button class="btn btn--ghost" id="archiveBtn">Archive (0)</button>
+    <button class="btn btn--ghost" id="exportBtn">Export</button>
+    <button class="btn btn--ghost" id="importBtn">Import</button>
+  </div>
+  <input type="file" id="importFile" accept="application/json" hidden>
+  <span id="msg"></span>
+</footer>
+
+<dialog id="taskDlg">
+  <form id="taskForm">
+    <label class="field">Title
+      <input type="text" id="fTitle" required autocomplete="off">
+    </label>
+    <div id="flagsRow">
+      <div class="togglerow">
+        <button type="button" class="tgl" id="tglUrgent" aria-pressed="false">Urgent</button>
+        <button type="button" class="tgl" id="tglImportant" aria-pressed="false">Important</button>
+        <button type="button" id="clearFlags">clear</button>
+      </div>
+      <div id="quadHint"></div>
+    </div>
+    <label class="field">Notes
+      <textarea id="fNotes"></textarea>
+    </label>
+    <label class="field">Deadline
+      <input type="date" id="fDeadline">
+    </label>
+    <label class="field">Tag
+      <input type="text" id="fTag" list="tagList" autocomplete="off">
+    </label>
+    <label class="field starlabel"><input type="checkbox" id="fStar"> ★ Star</label>
+    <div class="dlgfoot">
+      <button class="btn primary" type="submit">Save</button>
+      <button class="btn btn--ghost" type="button" id="dlgCancel">Cancel</button>
+      <button type="button" id="dlgDelete" hidden>Delete</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="moveMenu" popover="auto"></div>
+<datalist id="tagList"></datalist>
+
+<script>
+"use strict";
+const KEY = "eisenhower.v1";
+const PALETTE = ["clay", "sage", "ochre", "dusk", "plum"];
+const QUADS = { q1:{u:true,i:true,name:"Q1 · Urgent & Important"}, q2:{u:false,i:true,name:"Q2 · Important"},
+                q3:{u:true,i:false,name:"Q3 · Urgent"}, q4:{u:false,i:false,name:"Q4 · Neither"} };
+const $ = s => document.querySelector(s);
+
+let state = load();
+let filter = null;          // null | "★" | tag name
+let zoom = null;            // null | "q1".."q4"
+let inArchive = false;
+let openSubs = new Set();   // task ids with expanded subtask lists
+let editingId = null, dlgU = null, dlgI = null;
+let dragId = null, moveId = null;
+
+/* ---------- theme ---------- */
+const THEME_KEY = "eisenhower.theme";
+const THEME_COLORS = { light: "#e9e0cf", dark: "#211c16" };
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  document.querySelector('meta[name="theme-color"]').setAttribute("content", THEME_COLORS[t]);
+}
+let theme = localStorage.getItem(THEME_KEY) ||
+  (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+applyTheme(theme);
+$("#darkBtn").addEventListener("click", () => {
+  theme = theme === "dark" ? "light" : "dark";
+  localStorage.setItem(THEME_KEY, theme);
+  applyTheme(theme);
+});
+
+/* ---------- persistence ---------- */
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && s.version === 1 && Array.isArray(s.tasks) && Array.isArray(s.tags)) { gcTags(s); return s; }
+  } catch (e) {}
+  return { version: 1, tasks: [], tags: [] };
+}
+function persist() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function save() { persist(); render(); }
+function gcTags(s) {
+  s.tags = s.tags.filter(tag => s.tasks.some(t => t.tag === tag.name));
+}
+
+/* ---------- helpers ---------- */
+const uid = () => "t_" + Math.random().toString(36).slice(2, 9);
+const byId = id => state.tasks.find(t => t.id === id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const subsOf = id => state.tasks.filter(t => t.parentId === id).sort((a, b) => a.order - b.order);
+function quadOf(t) {
+  if (t.urgent == null || t.important == null) return "un";
+  return t.urgent ? (t.important ? "q1" : "q3") : (t.important ? "q2" : "q4");
+}
+function containerOf(t) { return t.parentId ? "p:" + t.parentId : quadOf(t); }
+function tasksIn(key) {
+  const list = state.tasks.filter(t => !t.completedAt && containerOf(t) === key);
+  if (key.startsWith("p:")) return list.sort((a, b) => a.order - b.order);
+  return list.sort((a, b) => (b.starred - a.starred) || (a.order - b.order));
+}
+function tagColor(name) {
+  const tag = state.tags.find(x => x.name === name);
+  return tag ? tag.color : "clay";
+}
+function ensureTag(raw) {
+  const name = raw.trim();
+  if (!name) return "";
+  const existing = state.tags.find(x => x.name.toLowerCase() === name.toLowerCase());
+  if (existing) return existing.name;
+  const used = state.tags.map(x => x.color);
+  const color = PALETTE.find(c => !used.includes(c)) || PALETTE[state.tags.length % PALETTE.length];
+  state.tags.push({ name, color });
+  return name;
+}
+function fmtDeadline(d) {
+  return new Date(d + "T00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+function deadlineSoon(d) {
+  const days = (new Date(d + "T00:00") - new Date(new Date().toDateString())) / 864e5;
+  return days <= 3;
+}
+function matchesFilter(t) {
+  if (!filter) return true;
+  return filter === "★" ? t.starred : t.tag === filter;
+}
+
+/* ---------- rendering ---------- */
+function render() {
+  document.querySelectorAll(".quadrant").forEach(q => {
+    const key = q.id, list = tasksIn(key);
+    q.querySelector(".count").textContent = list.length || "";
+    q.querySelector(".cards").innerHTML = list.map(cardHTML).join("");
+    q.classList.toggle("zoom-active", zoom === key);
+  });
+  const un = tasksIn("un");
+  $("#unsortedWrap").hidden = !un.length;
+  $("#unsortedWrap .cards").innerHTML = un.map(cardHTML).join("");
+  $("#matrix").classList.toggle("zoomed", !!zoom);
+
+  const archived = state.tasks.filter(t => t.completedAt && !t.parentId);
+  $("#archiveBtn").textContent = inArchive ? "← Back to matrix" : `Archive (${archived.length})`;
+  $("#matrix").hidden = inArchive;
+  $("#archive").hidden = !inArchive;
+  if (inArchive) renderArchive(archived);
+
+  $("#tagList").innerHTML = state.tags.map(t => `<option value="${esc(t.name)}">`).join("");
+  renderTagMenu();
+}
+
+function cardHTML(t) {
+  const subs = subsOf(t.id);
+  const doneSubs = subs.filter(s => s.completedAt).length;
+  const dim = !matchesFilter(t) ? " dim" : "";
+  return `<div class="card${dim}" data-id="${t.id}" draggable="true">
+    <div class="cardline">
+      ${t.starred ? '<span class="star">★</span>' : ""}
+      <span class="title">${esc(t.title)}</span>
+      ${t.tag ? `<span class="chip ${tagColor(t.tag)}">${esc(t.tag)}</span>` : ""}
+      ${t.deadline ? `<span class="deadline${deadlineSoon(t.deadline) ? " soon" : ""}">${fmtDeadline(t.deadline)}</span>` : ""}
+      ${t.notes ? '<span class="noteglyph">¶</span>' : ""}
+      ${actsHTML(t)}
+    </div>
+    ${subs.length ? `<details class="subs"${openSubs.has(t.id) ? " open" : ""} data-id="${t.id}">
+      <summary><span class="tri">▶</span> ${doneSubs}/${subs.length}</summary>
+      <div class="sublist" data-zone="p:${t.id}">${subs.map(subHTML).join("")}</div>
+      <input class="addsub" data-parent="${t.id}" placeholder="add subtask" aria-label="Add subtask">
+    </details>` : ""}
+  </div>`;
+}
+function subHTML(t) {
+  return `<div class="card sub${t.completedAt ? " done" : ""}" data-id="${t.id}" draggable="true">
+    <div class="cardline">
+      ${t.starred ? '<span class="star">★</span>' : ""}
+      <span class="title">${esc(t.title)}</span>
+      ${t.tag ? `<span class="chip ${tagColor(t.tag)}">${esc(t.tag)}</span>` : ""}
+      ${t.deadline ? `<span class="deadline${deadlineSoon(t.deadline) ? " soon" : ""}">${fmtDeadline(t.deadline)}</span>` : ""}
+      ${t.notes ? '<span class="noteglyph">¶</span>' : ""}
+      ${t.completedAt ? '<span class="acts"></span>' : actsHTML(t)}
+    </div>
+  </div>`;
+}
+function actsHTML(t) {
+  return `<span class="acts">
+    <button class="ck" data-act="complete" title="Complete" aria-label="Complete">
+      <svg viewBox="0 0 16 16"><path d="M3 8.5l3.5 3.5L13 4.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+    </button>
+    <button data-act="edit" title="Edit" aria-label="Edit">✎</button>
+    <button data-act="move" title="Move" aria-label="Move">⋯</button>
+  </span>`;
+}
+
+function renderTagMenu() {
+  $("#tagMenuLabel").textContent = filter === null ? "All tags" : (filter === "★" ? "★ Starred" : filter);
+  $("#tagPanel").innerHTML =
+    `<button data-filter="">All</button>
+     <button data-filter="★"><span class="star">★</span> Starred</button>` +
+    state.tags.map(t =>
+      `<button data-filter="${esc(t.name)}"><span class="chip ${t.color}">${esc(t.name)}</span></button>`).join("");
+  document.querySelectorAll("#tagPanel button").forEach(b =>
+    b.setAttribute("aria-current", String((b.dataset.filter || null) === filter)));
+}
+
+function renderArchive(archived) {
+  const groups = {};
+  archived.sort((a, b) => b.completedAt.localeCompare(a.completedAt)).forEach(t => {
+    const m = new Date(t.completedAt).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    (groups[m] = groups[m] || []).push(t);
+  });
+  $("#archiveList").innerHTML = Object.entries(groups).map(([month, list]) =>
+    `<div class="month label">${month}</div>` +
+    list.map(t => `<div class="arow">
+        <span class="title">${esc(t.title)}</span>
+        ${t.tag ? `<span class="chip ${tagColor(t.tag)}">${esc(t.tag)}</span>` : ""}
+        <span class="qtag">${esc(QUADS[quadOf(t)] ? QUADS[quadOf(t)].name : "unsorted")}</span>
+        <span class="when">${new Date(t.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          <button data-unarchive="${t.id}">unarchive</button></span>
+      </div>`).join("")
+  ).join("") || '<p class="empty">Nothing archived yet.</p>';
+}
+
+/* ---------- mutations ---------- */
+function placeIn(t, key, index) {
+  if (key === "un") { t.parentId = null; t.urgent = null; t.important = null; }
+  else if (key.startsWith("q")) { t.parentId = null; t.urgent = QUADS[key].u; t.important = QUADS[key].i; }
+  else { t.parentId = key.slice(2); }
+  const list = tasksIn(key).filter(x => x.id !== t.id);
+  if (index == null || index > list.length) index = list.length;
+  list.splice(index, 0, t);
+  list.forEach((x, i) => x.order = i);
+  save();
+}
+function canNest(dragged, target) {
+  return dragged && target && dragged.id !== target.id && !target.parentId &&
+    !subsOf(dragged.id).length && !dragged.completedAt;
+}
+function completeTask(id) {
+  const t = byId(id);
+  const open = subsOf(id).filter(s => !s.completedAt);
+  if (open.length && !confirm(`"${t.title}" has ${open.length} open subtask${open.length > 1 ? "s" : ""}. They'll be archived too.`)) return;
+  const el = document.querySelector(`.card[data-id="${id}"]`);
+  const stamp = new Date().toISOString();
+  const finish = () => { t.completedAt = stamp; open.forEach(s => s.completedAt = stamp); save(); };
+  if (el) { el.classList.add("completing"); setTimeout(finish, 340); } else finish();
+}
+function unarchive(id) {
+  const t = byId(id);
+  const stamp = t.completedAt;
+  t.completedAt = null;
+  subsOf(id).forEach(s => { if (s.completedAt === stamp) s.completedAt = null; });
+  save();
+}
+
+/* ---------- dialog ---------- */
+function quadHint() {
+  const key = (dlgU == null || dlgI == null) ? "un" : (dlgU ? (dlgI ? "q1" : "q3") : (dlgI ? "q2" : "q4"));
+  $("#quadHint").textContent = key === "un" ? "→ Unsorted" : "→ " + QUADS[key].name;
+  $("#tglUrgent").setAttribute("aria-pressed", dlgU === true);
+  $("#tglImportant").setAttribute("aria-pressed", dlgI === true);
+}
+function openDlg(id) {
+  editingId = id;
+  const t = id ? byId(id) : null;
+  $("#fTitle").value = t ? t.title : "";
+  $("#fNotes").value = t ? t.notes : "";
+  $("#fDeadline").value = t && t.deadline ? t.deadline : "";
+  $("#fTag").value = t ? t.tag || "" : "";
+  $("#fStar").checked = t ? t.starred : false;
+  dlgU = t ? t.urgent : null;
+  dlgI = t ? t.important : null;
+  $("#flagsRow").hidden = !!(t && t.parentId);   // subtasks inherit the parent's quadrant
+  $("#dlgDelete").hidden = !t;
+  quadHint();
+  $("#taskDlg").showModal();
+}
+$("#tglUrgent").addEventListener("click", () => { dlgU = dlgU === true ? false : true; if (dlgI == null) dlgI = false; quadHint(); });
+$("#tglImportant").addEventListener("click", () => { dlgI = dlgI === true ? false : true; if (dlgU == null) dlgU = false; quadHint(); });
+$("#clearFlags").addEventListener("click", () => { dlgU = null; dlgI = null; quadHint(); });
+$("#dlgCancel").addEventListener("click", () => $("#taskDlg").close());
+$("#dlgDelete").addEventListener("click", () => {
+  const t = byId(editingId);
+  const subs = subsOf(t.id);
+  if (!confirm(`Delete "${t.title}"${subs.length ? " and its " + subs.length + " subtask(s)" : ""}? This can't be undone.`)) return;
+  state.tasks = state.tasks.filter(x => x.id !== t.id && x.parentId !== t.id);
+  gcTags(state);
+  $("#taskDlg").close();
+  save();
+});
+$("#taskForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const tag = ensureTag($("#fTag").value);
+  if (editingId) {
+    const t = byId(editingId);
+    t.title = $("#fTitle").value.trim();
+    t.notes = $("#fNotes").value;
+    t.deadline = $("#fDeadline").value || null;
+    t.tag = tag || null;
+    t.starred = $("#fStar").checked;
+    if (!t.parentId) { t.urgent = dlgU; t.important = dlgI; }
+  } else {
+    const t = {
+      id: uid(), title: $("#fTitle").value.trim(), urgent: dlgU, important: dlgI,
+      notes: $("#fNotes").value, deadline: $("#fDeadline").value || null, tag: tag || null,
+      starred: $("#fStar").checked, parentId: null, order: 0,
+      completedAt: null, createdAt: new Date().toISOString()
+    };
+    t.order = tasksIn(quadOf(t)).length;
+    state.tasks.push(t);
+  }
+  gcTags(state);
+  $("#taskDlg").close();
+  save();
+});
+
+/* ---------- clicks ---------- */
+document.addEventListener("click", e => {
+  const btn = e.target.closest("button, .addsub");
+  // close any open header menu when clicking elsewhere
+  document.querySelectorAll("details.menu[open]").forEach(m => { if (!m.contains(e.target)) m.open = false; });
+  if (!btn) return;
+
+  if (btn.id === "newBtn") return openDlg(null);
+  if (btn.id === "archiveBtn") { inArchive = !inArchive; return render(); }
+  if (btn.id === "exportBtn") return doExport();
+  if (btn.id === "importBtn") return $("#importFile").click();
+  if (btn.dataset.unarchive) return unarchive(btn.dataset.unarchive);
+
+  if (btn.dataset.filter !== undefined) {
+    filter = btn.dataset.filter === "" ? null : btn.dataset.filter;
+    $("#tagMenu").open = false;
+    return render();
+  }
+  if (btn.dataset.zoom !== undefined) {
+    zoom = btn.dataset.zoom || null;
+    $("#quadMenu").open = false;
+    return render();
+  }
+  if (btn.dataset.act) {
+    const id = btn.closest(".card").dataset.id;
+    if (btn.dataset.act === "complete") return completeTask(id);
+    if (btn.dataset.act === "edit") return openDlg(id);
+    if (btn.dataset.act === "move") return openMoveMenu(id, btn);
+  }
+  if (btn.dataset.moveTo !== undefined) {
+    const t = byId(moveId);
+    $("#moveMenu").hidePopover();
+    if (btn.dataset.moveTo === "detach") { t.parentId = null; return placeIn(t, quadOf(t), null); }
+    return placeIn(t, btn.dataset.moveTo, null);
+  }
+});
+
+/* quadrant headers: zoom on desktop / while zoomed; native collapse on phones */
+document.querySelectorAll(".quadrant > summary").forEach(sum => {
+  sum.addEventListener("click", e => {
+    const wide = window.matchMedia("(min-width: 701px)").matches;
+    if (wide || zoom) {
+      e.preventDefault();
+      const key = sum.parentElement.id;
+      zoom = zoom === key ? null : key;
+      render();
+    }
+  });
+});
+
+/* remember subtask-list disclosure across re-renders */
+document.addEventListener("toggle", e => {
+  const d = e.target;
+  if (d.classList && d.classList.contains("subs")) {
+    if (d.open) openSubs.add(d.dataset.id); else openSubs.delete(d.dataset.id);
+  }
+}, true);
+
+/* inline add-subtask */
+document.addEventListener("keydown", e => {
+  if (e.target.classList && e.target.classList.contains("addsub") && e.key === "Enter") {
+    e.preventDefault();
+    const title = e.target.value.trim();
+    if (!title) return;
+    const parentId = e.target.dataset.parent;
+    state.tasks.push({
+      id: uid(), title, urgent: null, important: null, notes: "", deadline: null, tag: null,
+      starred: false, parentId, order: subsOf(parentId).length,
+      completedAt: null, createdAt: new Date().toISOString()
+    });
+    openSubs.add(parentId);
+    save();
+    const again = document.querySelector(`.addsub[data-parent="${parentId}"]`);
+    if (again) again.focus();
+    return;
+  }
+  if (e.key === "n" && !e.metaKey && !e.ctrlKey && !e.altKey &&
+      !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && !$("#taskDlg").open) {
+    e.preventDefault();
+    openDlg(null);
+  }
+});
+
+/* ---------- move menu ---------- */
+function openMoveMenu(id, anchor) {
+  moveId = id;
+  const t = byId(id);
+  const menu = $("#moveMenu");
+  menu.innerHTML = Object.keys(QUADS).map(k =>
+      `<button data-move-to="${k}">${esc(QUADS[k].name)}</button>`).join("") +
+    `<button data-move-to="un">Unsorted</button>` +
+    (t.parentId ? `<button data-move-to="detach">Detach from parent</button>` : "");
+  menu.showPopover();
+  const r = anchor.getBoundingClientRect(), m = menu.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(r.left, innerWidth - m.width - 8)) + "px";
+  menu.style.top = (r.bottom + 4 + m.height > innerHeight ? r.top - m.height - 4 : r.bottom + 4) + "px";
+}
+
+/* ---------- drag and drop ---------- */
+function clearDropHints() {
+  document.querySelectorAll(".nest-hl, .ins-before, .ins-after, .zone-hl")
+    .forEach(el => el.classList.remove("nest-hl", "ins-before", "ins-after", "zone-hl"));
+}
+function dropTarget(e) {
+  // returns {key, index} for a legal drop, or null
+  const d = byId(dragId);
+  const zoneEl = e.target.closest("[data-zone]");
+  if (!d || !zoneEl) return null;
+  const key = zoneEl.dataset.zone;
+  if (key.startsWith("p:") && !canNest(d, byId(key.slice(2)))) return null;
+  const cards = [...zoneEl.querySelectorAll(":scope > .card")].filter(c => c.dataset.id !== dragId);
+  const over = e.target.closest(".card");
+  if (over && over.dataset.id !== dragId && zoneEl.contains(over) && cards.includes(over)) {
+    const r = over.getBoundingClientRect();
+    const y = (e.clientY - r.top) / r.height;
+    if (y > 0.3 && y < 0.7 && !over.classList.contains("sub") && canNest(d, byId(over.dataset.id)))
+      return { key: "p:" + over.dataset.id, index: null, nestEl: over };
+    return { key, index: cards.indexOf(over) + (y >= 0.5 ? 1 : 0), lineEl: over, after: y >= 0.5 };
+  }
+  return { key, index: cards.length, zoneEl };
+}
+document.addEventListener("dragstart", e => {
+  const card = e.target.closest(".card");
+  if (!card) return;
+  dragId = card.dataset.id;
+  card.classList.add("dragging");
+  e.dataTransfer.setData("text/plain", dragId);
+  e.dataTransfer.effectAllowed = "move";
+});
+document.addEventListener("dragend", () => {
+  document.querySelectorAll(".dragging").forEach(el => el.classList.remove("dragging"));
+  clearDropHints();
+  dragId = null;
+});
+document.addEventListener("dragover", e => {
+  const t = dropTarget(e);
+  clearDropHints();
+  if (!t) return;
+  e.preventDefault();
+  if (t.nestEl) t.nestEl.classList.add("nest-hl");
+  else if (t.lineEl) t.lineEl.classList.add(t.after ? "ins-after" : "ins-before");
+  else if (t.zoneEl) t.zoneEl.classList.add("zone-hl");
+});
+document.addEventListener("drop", e => {
+  const t = dropTarget(e);
+  clearDropHints();
+  if (!t) return;
+  e.preventDefault();
+  placeIn(byId(dragId), t.key, t.index);
+});
+
+/* ---------- export / import ---------- */
+function doExport() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ike-" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function flash(text) {
+  $("#msg").textContent = text;
+  setTimeout(() => { $("#msg").textContent = ""; }, 5000);
+}
+$("#importFile").addEventListener("change", e => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const s = JSON.parse(reader.result);
+      if (!s || s.version !== 1 || !Array.isArray(s.tasks) || !Array.isArray(s.tags))
+        throw new Error("not an Eisenhower export");
+      if (!confirm("Replace everything with the imported file? Current tasks will be lost.")) return;
+      state = s;
+      gcTags(state);
+      save();
+    } catch (err) {
+      flash("Import failed: " + err.message + " — nothing was changed.");
+    }
+  };
+  reader.onerror = () => flash("Import failed: could not read file.");
+  reader.readAsText(file);
+});
+
+render();
+</script>
+</body>
+</html>
