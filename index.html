@@ -128,19 +128,21 @@ details.menu>.panel{
 .card.ins-before{box-shadow:0 -4px 0 0 var(--sage)}
 .card.ins-after{box-shadow:0 4px 0 0 var(--sage)}
 .cards.zone-hl{outline:2px dashed var(--sage); outline-offset:3px; border-radius:10px}
-.cardline{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
-.star{color:var(--ochre)}
-.title{overflow-wrap:anywhere; font-weight:700}
+.cardline{display:flex; align-items:center; gap:8px}
+.cardline+.cardline{margin-top:6px}
+.star{color:var(--ochre); flex:0 0 auto}
+.title{flex:1; min-width:0; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .chip{
   font-size:.7rem; font-weight:800; border-radius:99px; padding:3px 10px; white-space:nowrap;
-  text-transform:uppercase; letter-spacing:.5px;
+  text-transform:uppercase; letter-spacing:.5px; flex:0 1 auto; min-width:0;
+  overflow:hidden; text-overflow:ellipsis;
 }
 .chip.clay{background:var(--clay-tint); color:var(--clay)}
 .chip.sage{background:var(--sage-tint); color:var(--sage)}
 .chip.ochre{background:color-mix(in srgb,var(--ochre) 22%,transparent); color:var(--ochre)}
 .chip.dusk{background:color-mix(in srgb,var(--dusk) 22%,transparent); color:var(--dusk)}
 .chip.plum{background:color-mix(in srgb,var(--plum) 22%,transparent); color:var(--plum)}
-.deadline{font-size:.78rem; color:var(--muted); font-weight:800; white-space:nowrap}
+.deadline{font-size:.78rem; color:var(--muted); font-weight:800; white-space:nowrap; flex:0 0 auto}
 .deadline.soon{color:var(--clay)}
 .noteglyph{color:var(--muted); font-size:.8rem; font-weight:800}
 .acts{margin-left:auto; display:flex; gap:5px; opacity:0; transition:opacity .12s}
@@ -172,6 +174,7 @@ details.subs>summary::-webkit-details-marker{display:none}
 details.subs>summary .tri{display:inline-block; font-size:.7em}
 details.subs[open]>summary .tri{rotate:90deg}
 .sublist{display:flex; flex-direction:column; gap:2px; margin:6px 0 0 8px; border-left:2px solid var(--line); padding-left:10px}
+.sublist:empty{display:none}
 .card.sub{border:none; background:none; padding:3px 0; border-radius:0}
 .card.sub .cardline{flex-wrap:nowrap}
 .card.sub .title{font-weight:600}
@@ -218,7 +221,6 @@ dialog textarea{min-height:4.2rem}
 .tgl[aria-pressed="true"]{background:var(--sage); border-color:var(--sage); color:#0f201d}
 :root[data-theme="dark"] .tgl[aria-pressed="true"]{color:#141810}
 #quadHint{font-size:.82rem; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-top:6px}
-#clearFlags{color:var(--muted); font-size:.78rem; font-weight:800; text-decoration:underline}
 .dlgfoot{display:flex; align-items:center; gap:10px; margin-top:4px}
 .dlgfoot .primary{flex:1}
 #dlgCancel{flex:1}
@@ -329,10 +331,11 @@ footer{margin-top:22px}
       <input type="text" id="fTitle" required autocomplete="off">
     </label>
     <div id="flagsRow">
-      <div class="togglerow">
-        <button type="button" class="tgl" id="tglUrgent" aria-pressed="false">Urgent</button>
-        <button type="button" class="tgl" id="tglImportant" aria-pressed="false">Important</button>
-        <button type="button" id="clearFlags">clear</button>
+      <div class="togglerow" id="quadPick">
+        <button type="button" class="tgl" data-q="q1" aria-pressed="false" title="Urgent &amp; Important">Q1</button>
+        <button type="button" class="tgl" data-q="q2" aria-pressed="false" title="Important">Q2</button>
+        <button type="button" class="tgl" data-q="q3" aria-pressed="false" title="Urgent">Q3</button>
+        <button type="button" class="tgl" data-q="q4" aria-pressed="false" title="Neither">Q4</button>
       </div>
       <div id="quadHint"></div>
     </div>
@@ -475,16 +478,18 @@ function cardHTML(t) {
     <div class="cardline">
       ${t.starred ? '<span class="star">★</span>' : ""}
       <span class="title">${esc(t.title)}</span>
+    </div>
+    <div class="cardline">
       ${t.tag ? `<span class="chip ${tagColor(t.tag)}">${esc(t.tag)}</span>` : ""}
       ${t.deadline ? `<span class="deadline${deadlineSoon(t.deadline) ? " soon" : ""}">${fmtDeadline(t.deadline)}</span>` : ""}
       ${t.notes ? '<span class="noteglyph">¶</span>' : ""}
       ${actsHTML(t)}
     </div>
-    ${subs.length ? `<details class="subs"${openSubs.has(t.id) ? " open" : ""} data-id="${t.id}">
-      <summary><span class="tri">▶</span> ${doneSubs}/${subs.length}</summary>
+    <details class="subs"${openSubs.has(t.id) ? " open" : ""} data-id="${t.id}">
+      <summary><span class="tri">▶</span> ${subs.length ? `${doneSubs}/${subs.length}` : "subtasks"}</summary>
       <div class="sublist" data-zone="p:${t.id}">${subs.map(subHTML).join("")}</div>
       <input class="addsub" data-parent="${t.id}" placeholder="add subtask" aria-label="Add subtask">
-    </details>` : ""}
+    </details>
   </div>`;
 }
 function subHTML(t) {
@@ -571,11 +576,14 @@ function unarchive(id) {
 }
 
 /* ---------- dialog ---------- */
+function dlgQuadKey() {
+  return (dlgU == null || dlgI == null) ? null : (dlgU ? (dlgI ? "q1" : "q3") : (dlgI ? "q2" : "q4"));
+}
 function quadHint() {
-  const key = (dlgU == null || dlgI == null) ? "un" : (dlgU ? (dlgI ? "q1" : "q3") : (dlgI ? "q2" : "q4"));
-  $("#quadHint").textContent = key === "un" ? "→ Unsorted" : "→ " + QUADS[key].name;
-  $("#tglUrgent").setAttribute("aria-pressed", dlgU === true);
-  $("#tglImportant").setAttribute("aria-pressed", dlgI === true);
+  const key = dlgQuadKey();
+  $("#quadHint").textContent = key ? "→ " + QUADS[key].name : "→ Unsorted";
+  document.querySelectorAll("#quadPick .tgl").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.q === key)));
 }
 function openDlg(id) {
   editingId = id;
@@ -592,9 +600,11 @@ function openDlg(id) {
   quadHint();
   $("#taskDlg").showModal();
 }
-$("#tglUrgent").addEventListener("click", () => { dlgU = dlgU === true ? false : true; if (dlgI == null) dlgI = false; quadHint(); });
-$("#tglImportant").addEventListener("click", () => { dlgI = dlgI === true ? false : true; if (dlgU == null) dlgU = false; quadHint(); });
-$("#clearFlags").addEventListener("click", () => { dlgU = null; dlgI = null; quadHint(); });
+document.querySelectorAll("#quadPick .tgl").forEach(b => b.addEventListener("click", () => {
+  if (dlgQuadKey() === b.dataset.q) { dlgU = null; dlgI = null; }   // tap again to unset
+  else { dlgU = QUADS[b.dataset.q].u; dlgI = QUADS[b.dataset.q].i; }
+  quadHint();
+}));
 $("#dlgCancel").addEventListener("click", () => $("#taskDlg").close());
 $("#dlgDelete").addEventListener("click", () => {
   const t = byId(editingId);
