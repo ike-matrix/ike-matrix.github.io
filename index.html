@@ -203,7 +203,8 @@ dialog{
 }
 dialog::backdrop{background:rgba(56,47,38,.45)}
 dialog form{display:flex; flex-direction:column; gap:14px}
-dialog input[type=text], dialog input[type=date], dialog textarea{
+dialog input[type=text], dialog input[type=date], dialog input[type=email],
+dialog input[type=password], dialog textarea{
   font:inherit; background:var(--surface-2); border:1.5px solid var(--line); border-radius:12px;
   padding:11px 14px; color:var(--ink); width:100%; resize:vertical;
 }
@@ -233,6 +234,13 @@ label.field{display:flex; flex-direction:column; gap:6px; font-weight:800; font-
 label.starlabel{flex-direction:row; align-items:center; gap:8px; font-size:.95rem; letter-spacing:0;
   text-transform:none; color:var(--ink); font-weight:700}
 label.starlabel input{width:18px; height:18px; accent-color:var(--ochre)}
+
+/* ---------- account / sync ---------- */
+#syncBtn.on{border-color:var(--sage); color:var(--sage)}
+#authMsg{display:block; color:var(--clay); font-weight:800; font-size:.8rem; min-height:1.2em}
+#authSignedIn p{margin:0}
+#authSignedIn .who{font-weight:800; overflow-wrap:anywhere}
+#authSignedIn .hint{color:var(--muted); font-weight:700; font-size:.85rem}
 
 /* ---------- archive ---------- */
 #archive h2{font-family:"Fraunces",Baskerville,Georgia,serif; font-weight:650; font-size:1.6rem; margin:6px 0 14px}
@@ -284,6 +292,7 @@ footer{margin-top:22px}
       <button data-zoom="q4">Q4 · Neither</button>
     </div>
   </details>
+  <button class="icon-btn" id="syncBtn" aria-label="Account &amp; sync" hidden>⇅</button>
   <button class="icon-btn" id="darkBtn" aria-label="Toggle dark mode">◐</button>
 </header>
 
@@ -357,16 +366,52 @@ footer{margin-top:22px}
   </form>
 </dialog>
 
+<dialog id="authDlg">
+  <form id="authForm">
+    <div id="authSignedOut" style="display:flex; flex-direction:column; gap:14px">
+      <label class="field">Email
+        <input type="email" id="fEmail" required autocomplete="email">
+      </label>
+      <label class="field">Password
+        <input type="password" id="fPassword" required minlength="8" autocomplete="current-password">
+      </label>
+      <span id="authMsg"></span>
+      <div class="dlgfoot">
+        <button class="btn primary" type="submit">Sign in</button>
+        <button class="btn btn--ghost" type="button" id="signUpBtn">Create account</button>
+        <button class="btn btn--ghost" type="button" id="authCancel">Close</button>
+      </div>
+    </div>
+    <div id="authSignedIn" style="display:flex; flex-direction:column; gap:14px" hidden>
+      <p class="who" id="authEmail"></p>
+      <p class="hint">Signed in — your tasks sync to this account automatically.</p>
+      <div class="dlgfoot">
+        <button class="btn btn--ghost" type="button" id="signOutBtn">Sign out</button>
+        <button class="btn btn--ghost" type="button" id="authCancel2">Close</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
 <div id="moveMenu" popover="auto"></div>
 <datalist id="tagList"></datalist>
 
 <script>
 "use strict";
-const KEY = "eisenhower.v1";
+const KEY = "ike.v1";
 const PALETTE = ["clay", "sage", "ochre", "dusk", "plum"];
 const QUADS = { q1:{u:true,i:true,name:"Q1 · Urgent & Important"}, q2:{u:false,i:true,name:"Q2 · Important"},
                 q3:{u:true,i:false,name:"Q3 · Urgent"}, q4:{u:false,i:false,name:"Q4 · Neither"} };
 const $ = s => document.querySelector(s);
+
+// carry over data saved under the app's previous internal name
+[["eisenhower.v1", "ike.v1"], ["eisenhower.theme", "ike.theme"],
+ ["eisenhower.lastSyncedAt", "ike.lastSyncedAt"]].forEach(([oldK, newK]) => {
+  if (localStorage.getItem(newK) === null && localStorage.getItem(oldK) !== null) {
+    localStorage.setItem(newK, localStorage.getItem(oldK));
+    localStorage.removeItem(oldK);
+  }
+});
 
 let state = load();
 let filter = null;          // null | "★" | tag name
@@ -377,7 +422,7 @@ let editingId = null, dlgU = null, dlgI = null;
 let dragId = null, moveId = null;
 
 /* ---------- theme ---------- */
-const THEME_KEY = "eisenhower.theme";
+const THEME_KEY = "ike.theme";
 const THEME_COLORS = { light: "#e9e0cf", dark: "#211c16" };
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
@@ -400,7 +445,7 @@ function load() {
   } catch (e) {}
   return { version: 1, tasks: [], tags: [] };
 }
-function persist() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function persist() { localStorage.setItem(KEY, JSON.stringify(state)); schedulePush(); }
 function save() { persist(); render(); }
 function gcTags(s) {
   s.tags = s.tags.filter(tag => s.tasks.some(t => t.tag === tag.name));
@@ -644,7 +689,6 @@ $("#taskForm").addEventListener("submit", e => {
 /* ---------- clicks ---------- */
 document.addEventListener("click", e => {
   const btn = e.target.closest("button, .addsub");
-  // close any open header menu when clicking elsewhere
   document.querySelectorAll("details.menu[open]").forEach(m => { if (!m.contains(e.target)) m.open = false; });
   if (!btn) return;
 
@@ -814,7 +858,7 @@ $("#importFile").addEventListener("change", e => {
     try {
       const s = JSON.parse(reader.result);
       if (!s || s.version !== 1 || !Array.isArray(s.tasks) || !Array.isArray(s.tags))
-        throw new Error("not an Eisenhower export");
+        throw new Error("not an Ike export");
       if (!confirm("Replace everything with the imported file? Current tasks will be lost.")) return;
       state = s;
       gcTags(state);
@@ -827,7 +871,132 @@ $("#importFile").addEventListener("change", e => {
   reader.readAsText(file);
 });
 
+/* ---------- cloud sync (Supabase) ----------
+   Left empty, the app stays local-only. To enable sync, run supabase/setup.sql
+   in a Supabase project and paste its URL and public (anon) key here — safe to
+   publish, since data access is enforced server-side by row-level security. */
+const SUPABASE_URL = "https://zrvjeydqtzccxwvnhvmn.supabase.co";
+const SUPABASE_KEY = "sb_publishable_fGgTsHwFA--YgUNZPC1Ykg_aYGHaWt8";
+const SYNC_KEY = "ike.lastSyncedAt";
+
+let sb = null, sbUser = null, syncDirty = false, pushTimer = null, pulling = false;
+
+function schedulePush() {
+  if (!sb || !sbUser) return;
+  syncDirty = true;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushNow, 1500);
+}
+async function pushNow() {
+  if (!sb || !sbUser) return;
+  clearTimeout(pushTimer);
+  const { data, error } = await sb.from("matrix_state")
+    .upsert({ user_id: sbUser.id, data: state, updated_at: new Date().toISOString() })
+    .select("updated_at").single();
+  if (error) { flash("Sync failed — changes are saved on this device."); return; }
+  syncDirty = false;
+  localStorage.setItem(SYNC_KEY, data.updated_at);
+}
+function adoptCloud(row) {
+  const s = row.data;
+  if (!s || s.version !== 1 || !Array.isArray(s.tasks) || !Array.isArray(s.tags)) {
+    flash("Sync: cloud copy looks invalid — ignored.");
+    return;
+  }
+  state = s;
+  gcTags(state);
+  localStorage.setItem(KEY, JSON.stringify(state));   // no schedulePush: this IS the cloud copy
+  localStorage.setItem(SYNC_KEY, row.updated_at);
+  render();
+}
+async function pullMerge() {
+  if (!sb || !sbUser || pulling) return;
+  pulling = true;
+  try {
+    const { data: row, error } = await sb.from("matrix_state").select("data, updated_at").maybeSingle();
+    if (error) return flash("Sync error: " + error.message);
+    if (!row) {                                        // first device on this account
+      if (state.tasks.length) await pushNow(); else localStorage.removeItem(SYNC_KEY);
+      return;
+    }
+    if (JSON.stringify(row.data) === JSON.stringify(state)) {
+      localStorage.setItem(SYNC_KEY, row.updated_at);
+      return;
+    }
+    if (!state.tasks.length) return adoptCloud(row);
+    if (row.updated_at === localStorage.getItem(SYNC_KEY)) return pushNow();  // only we changed
+    const useCloud = confirm(
+      `Your cloud copy (updated ${new Date(row.updated_at).toLocaleString()}) differs from this device.\n\n` +
+      `OK — use the cloud copy here.\nCancel — keep this device's tasks and overwrite the cloud.`);
+    if (useCloud) adoptCloud(row); else await pushNow();
+  } finally { pulling = false; }
+}
+
+function authMsg(text) { $("#authMsg").textContent = text; }
+function renderAuth() {
+  $("#syncBtn").classList.toggle("on", !!sbUser);
+  $("#syncBtn").title = sbUser ? "Syncing as " + sbUser.email : "Sign in to sync";
+  $("#authSignedOut").hidden = !!sbUser;
+  $("#authSignedIn").hidden = !sbUser;
+  if (sbUser) $("#authEmail").textContent = sbUser.email;
+}
+
+async function initSync() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return;
+  const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
+  sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+  $("#syncBtn").hidden = false;
+  sb.auth.onAuthStateChange((_e, session) => { sbUser = session ? session.user : null; renderAuth(); });
+  const { data: { session } } = await sb.auth.getSession();
+  sbUser = session ? session.user : null;
+  renderAuth();
+  if (sbUser) pullMerge();
+
+  $("#syncBtn").addEventListener("click", () => { authMsg(""); $("#authDlg").showModal(); });
+  $("#authCancel").addEventListener("click", () => $("#authDlg").close());
+  $("#authCancel2").addEventListener("click", () => $("#authDlg").close());
+  $("#authForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    authMsg("");
+    const { error } = await sb.auth.signInWithPassword(
+      { email: $("#fEmail").value.trim(), password: $("#fPassword").value });
+    if (error) return authMsg(error.message);
+    $("#authDlg").close();
+    $("#fPassword").value = "";
+    await pullMerge();
+    flash("Signed in — sync is on.");
+  });
+  $("#signUpBtn").addEventListener("click", async () => {
+    if (!$("#authForm").reportValidity()) return;
+    authMsg("");
+    const { data, error } = await sb.auth.signUp(
+      { email: $("#fEmail").value.trim(), password: $("#fPassword").value });
+    if (error) return authMsg(error.message);
+    if (!data.session) return authMsg("Check your email for a confirmation link, then sign in.");
+    $("#authDlg").close();
+    $("#fPassword").value = "";
+    await pullMerge();
+    flash("Account created — sync is on.");
+  });
+  $("#signOutBtn").addEventListener("click", async () => {
+    if (syncDirty) await pushNow();
+    await sb.auth.signOut();
+    localStorage.removeItem(SYNC_KEY);
+    $("#authDlg").close();
+    flash("Signed out. Tasks stay on this device.");
+  });
+
+  // pick up changes made on another device when returning to the tab;
+  // flush pending local changes when leaving it
+  document.addEventListener("visibilitychange", () => {
+    if (!sbUser) return;
+    if (document.visibilityState === "visible" && !syncDirty) pullMerge();
+    else if (document.visibilityState === "hidden" && syncDirty) pushNow();
+  });
+}
+
 render();
+initSync();
 </script>
 </body>
 </html>
