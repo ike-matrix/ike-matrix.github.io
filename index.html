@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#e9e0cf">
 <title>Ike</title>
 <link rel="manifest" href="manifest.json">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Nunito:wght@400;600;700;800&display=swap">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
 :root{
   --bg:#e9e0cf; --bg-2:#e2d7c1; --surface:#f6efe1; --surface-2:#fcf8ef;
@@ -242,6 +242,24 @@ label.starlabel input{width:18px; height:18px; accent-color:var(--ochre)}
 #authSignedIn .who{font-weight:800; overflow-wrap:anywhere}
 #authSignedIn .hint{color:var(--muted); font-weight:700; font-size:.85rem}
 
+/* ---------- sync conflict dialog ---------- */
+#syncDlg{width:min(30rem,94vw)}
+.syncTitle{font-family:"Fraunces",Baskerville,Georgia,serif; font-weight:650; font-size:1.4rem; margin:0}
+#syncIntro{color:var(--muted); font-weight:700; font-size:.86rem; margin:0}
+#conflictList{display:flex; flex-direction:column; gap:12px; max-height:46vh; overflow:auto; margin:2px 0}
+.conflict{border:1.5px solid var(--line); border-radius:14px; padding:12px 14px; background:var(--surface-2)}
+.conflict .ctitle{font-weight:800; overflow-wrap:anywhere}
+.conflict .cwhat{color:var(--muted); font-weight:700; font-size:.78rem; margin:2px 0 8px; text-transform:uppercase; letter-spacing:.5px}
+.copt{display:flex; gap:9px; align-items:flex-start; padding:8px 10px; border:1.5px solid var(--line);
+  border-radius:11px; background:var(--surface); cursor:pointer; margin-top:6px; transition:border-color .12s, background .12s}
+.copt:has(input:checked){border-color:var(--sage); background:var(--sage-tint)}
+.copt input{margin-top:3px; accent-color:var(--sage); flex:0 0 auto}
+.copt .cside{font-weight:800; font-size:.72rem; text-transform:uppercase; letter-spacing:.5px; color:var(--ink-2)}
+.copt .cval{font-weight:600; font-size:.9rem; overflow-wrap:anywhere}
+.copt .cdel{color:var(--clay); font-weight:800}
+.cfield{display:block; margin-top:3px}
+.cfield b{font-weight:800; color:var(--ink-2); font-size:.74rem; text-transform:uppercase; letter-spacing:.4px}
+
 /* ---------- archive ---------- */
 #archive h2{font-family:"Fraunces",Baskerville,Georgia,serif; font-weight:650; font-size:1.6rem; margin:6px 0 14px}
 #archive .month{margin:20px 4px 10px}
@@ -393,9 +411,22 @@ footer{margin-top:22px}
   </form>
 </dialog>
 
+<dialog id="syncDlg">
+  <form id="syncForm">
+    <h2 class="syncTitle">Sync conflicts</h2>
+    <p class="hint" id="syncIntro"></p>
+    <div id="conflictList"></div>
+    <div class="dlgfoot">
+      <button class="btn primary" type="submit">Keep selected</button>
+      <button class="btn btn--ghost" type="button" id="syncNewest">Use newest for all</button>
+    </div>
+  </form>
+</dialog>
+
 <div id="moveMenu" popover="auto"></div>
 <datalist id="tagList"></datalist>
 
+<script src="vendor/supabase.js"></script>
 <script>
 "use strict";
 const KEY = "ike.v1";
@@ -453,6 +484,8 @@ function gcTags(s) {
 
 /* ---------- helpers ---------- */
 const uid = () => "t_" + Math.random().toString(36).slice(2, 9);
+const iso = () => new Date().toISOString();
+const touch = t => { if (t) t.updatedAt = iso(); };   // stamp last-edit time for sync tiebreaks
 const byId = id => state.tasks.find(t => t.id === id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 const subsOf = id => state.tasks.filter(t => t.parentId === id).sort((a, b) => a.order - b.order);
@@ -597,6 +630,7 @@ function placeIn(t, key, index) {
   if (index == null || index > list.length) index = list.length;
   list.splice(index, 0, t);
   list.forEach((x, i) => x.order = i);
+  touch(t);
   save();
 }
 function canNest(dragged, target) {
@@ -609,14 +643,18 @@ function completeTask(id) {
   if (open.length && !confirm(`"${t.title}" has ${open.length} open subtask${open.length > 1 ? "s" : ""}. They'll be archived too.`)) return;
   const el = document.querySelector(`.card[data-id="${id}"]`);
   const stamp = new Date().toISOString();
-  const finish = () => { t.completedAt = stamp; open.forEach(s => s.completedAt = stamp); save(); };
+  const finish = () => {
+    t.completedAt = stamp; touch(t);
+    open.forEach(s => { s.completedAt = stamp; touch(s); });
+    save();
+  };
   if (el) { el.classList.add("completing"); setTimeout(finish, 340); } else finish();
 }
 function unarchive(id) {
   const t = byId(id);
   const stamp = t.completedAt;
-  t.completedAt = null;
-  subsOf(id).forEach(s => { if (s.completedAt === stamp) s.completedAt = null; });
+  t.completedAt = null; touch(t);
+  subsOf(id).forEach(s => { if (s.completedAt === stamp) { s.completedAt = null; touch(s); } });
   save();
 }
 
@@ -671,12 +709,13 @@ $("#taskForm").addEventListener("submit", e => {
     t.tag = tag || null;
     t.starred = $("#fStar").checked;
     if (!t.parentId) { t.urgent = dlgU; t.important = dlgI; }
+    touch(t);
   } else {
     const t = {
       id: uid(), title: $("#fTitle").value.trim(), urgent: dlgU, important: dlgI,
       notes: $("#fNotes").value, deadline: $("#fDeadline").value || null, tag: tag || null,
       starred: $("#fStar").checked, parentId: null, order: 0,
-      completedAt: null, createdAt: new Date().toISOString()
+      completedAt: null, createdAt: iso(), updatedAt: iso()
     };
     t.order = tasksIn(quadOf(t)).length;
     state.tasks.push(t);
@@ -753,7 +792,7 @@ document.addEventListener("keydown", e => {
     state.tasks.push({
       id: uid(), title, urgent: null, important: null, notes: "", deadline: null, tag: null,
       starred: false, parentId, order: subsOf(parentId).length,
-      completedAt: null, createdAt: new Date().toISOString()
+      completedAt: null, createdAt: iso(), updatedAt: iso()
     });
     openSubs.add(parentId);
     save();
@@ -872,64 +911,275 @@ $("#importFile").addEventListener("change", e => {
 });
 
 /* ---------- cloud sync (Supabase) ----------
-   Left empty, the app stays local-only. To enable sync, run supabase/setup.sql
-   in a Supabase project and paste its URL and public (anon) key here — safe to
-   publish, since data access is enforced server-side by row-level security. */
+   The app is offline-first: localStorage is the source of truth and every change
+   is saved there immediately. When signed in, changes also sync to Supabase.
+
+   Sync is a three-way merge against a base snapshot (ike.base = the state as of
+   the last successful sync). Creates, deletions, disjoint edits, completions,
+   reorders and tag changes all merge silently. The only cases that ask the user
+   anything are: the SAME field edited on both sides, and a task edited on one
+   side but deleted on the other. Pushes use compare-and-swap so a write can never
+   clobber a cloud change it hasn't seen. Left empty, the app stays local-only. */
 const SUPABASE_URL = "https://zrvjeydqtzccxwvnhvmn.supabase.co";
 const SUPABASE_KEY = "sb_publishable_fGgTsHwFA--YgUNZPC1Ykg_aYGHaWt8";
-const SYNC_KEY = "ike.lastSyncedAt";
+const SYNC_KEY = "ike.lastSyncedAt";   // Supabase updated_at token of the copy we last synced
+const BASE_KEY = "ike.base";           // common-ancestor snapshot for three-way merge
 
 let sb = null, sbUser = null, syncDirty = false, pushTimer = null, pulling = false;
+let retryDelay = 0, retryTimer = null, syncDlgOpen = false, pendingMerge = null;
 
+/* --- snapshot + validity helpers --- */
+function validState(s) { return !!s && s.version === 1 && Array.isArray(s.tasks) && Array.isArray(s.tags); }
+function sameState(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+function saveBase(s) { localStorage.setItem(BASE_KEY, JSON.stringify(s)); }
+function loadBase() { try { const b = JSON.parse(localStorage.getItem(BASE_KEY)); return validState(b) ? b : null; } catch (e) { return null; } }
+const idMap = arr => new Map((arr || []).map(t => [t.id, t]));
+const maxStamp = (a, b) => (a || "") >= (b || "") ? (a || b || null) : (b || null);
+
+/* --- three-way merge --- */
+const MERGE_FIELDS = ["title", "notes", "deadline", "tag", "starred", "urgent", "important", "parentId"];
+const MEANINGFUL = [...MERGE_FIELDS, "completedAt"];   // fields that count as a real edit vs a base
+const FIELD_LABELS = { title: "Title", notes: "Notes", deadline: "Deadline", tag: "Tag", starred: "Star", parentId: "Nesting" };
+
+function meaningfullyChanged(a, b) { return MEANINGFUL.some(f => (a[f] ?? null) !== (b[f] ?? null)); }
+
+// merge one task that exists on both sides; returns the merged task + any fields that truly conflict
+function mergeTask(b, l, c) {
+  const base = b || {};
+  const out = { ...l };
+  const conflictFields = [];
+  for (const f of MERGE_FIELDS) {
+    const lv = l[f] ?? null, cv = c[f] ?? null, bv = base[f] ?? null;
+    if (lv === cv) out[f] = lv;             // both agree
+    else if (lv === bv) out[f] = cv;        // only cloud changed
+    else if (cv === bv) out[f] = lv;        // only this device changed
+    else { out[f] = lv; conflictFields.push(f); }   // both changed differently
+  }
+  // completion is intent, never a conflict: if both changed, the completion (or earliest) wins
+  const lc = l.completedAt ?? null, cc = c.completedAt ?? null, bc = base.completedAt ?? null;
+  if (lc === cc) out.completedAt = lc;
+  else if (lc === bc) out.completedAt = cc;
+  else if (cc === bc) out.completedAt = lc;
+  else out.completedAt = (lc && cc) ? (lc < cc ? lc : cc) : (lc || cc);
+  out.createdAt = base.createdAt || l.createdAt || c.createdAt;
+  out.updatedAt = maxStamp(l.updatedAt, c.updatedAt);
+  return { task: out, conflictFields };
+}
+
+// merge whole states; returns auto-resolved tasks, the conflicts needing a decision, and merged tags
+function mergeStates(base, local, cloud) {
+  const B = idMap(base.tasks), L = idMap(local.tasks), C = idMap(cloud.tasks);
+  const ids = new Set([...B.keys(), ...L.keys(), ...C.keys()]);
+  const autoTasks = [], conflicts = [];
+  for (const id of ids) {
+    const b = B.get(id), l = L.get(id), c = C.get(id);
+    if (l && c) {
+      const { task, conflictFields } = mergeTask(b, l, c);
+      if (!conflictFields.length) { autoTasks.push(task); continue; }
+      const taskB = { ...task };
+      conflictFields.forEach(f => taskB[f] = (c[f] ?? null));
+      conflicts.push({
+        kind: "fields", title: l.title || c.title, fields: conflictFields, local: l, cloud: c,
+        optionA: { label: "This device", task }, optionB: { label: "Cloud", task: taskB },
+        newest: (l.updatedAt || "") >= (c.updatedAt || "") ? "A" : "B"
+      });
+    } else if (l && !c) {
+      if (!b) autoTasks.push(l);                         // created here → keep
+      else if (meaningfullyChanged(b, l))                // edited here, deleted on cloud → ask
+        conflicts.push({ kind: "edit-delete", side: "local", title: l.title,
+          optionA: { label: "Keep it", task: l }, optionB: { label: "Delete", task: null, del: true }, newest: "A" });
+      // else: unchanged here, deleted on cloud → drop
+    } else if (!l && c) {
+      if (!b) autoTasks.push(c);                         // created on cloud → keep
+      else if (meaningfullyChanged(b, c))                // deleted here, edited on cloud → ask
+        conflicts.push({ kind: "edit-delete", side: "cloud", title: c.title,
+          optionA: { label: "Keep it", task: c }, optionB: { label: "Delete", task: null, del: true }, newest: "A" });
+      // else: unchanged on cloud, deleted here → drop
+    }
+    // neither side has it → drop
+  }
+  return { autoTasks, conflicts, tags: mergeTags(local.tags, cloud.tags) };
+}
+
+function mergeTags(a, b) {
+  const seen = new Map();
+  [...(a || []), ...(b || [])].forEach(t => {
+    if (!t || !t.name) return;
+    const k = t.name.toLowerCase();
+    if (!seen.has(k)) seen.set(k, { name: t.name, color: t.color });
+  });
+  return [...seen.values()];
+}
+
+// renumber order sequentially within each container (quadrant / unsorted / parent)
+function normalizeOrders(tasks) {
+  const groups = {};
+  tasks.forEach(t => {
+    if (t.completedAt) return;
+    const k = containerOf(t);
+    (groups[k] = groups[k] || []).push(t);
+  });
+  Object.values(groups).forEach(list => {
+    list.sort((x, y) => (x.order || 0) - (y.order || 0));
+    list.forEach((t, i) => t.order = i);
+  });
+}
+
+/* --- applying a merge result --- */
+function assembleTasks(choices) {
+  const { autoTasks, conflicts } = pendingMerge;
+  const tasks = autoTasks.slice();
+  conflicts.forEach((c, i) => {
+    const pick = (choices && choices[i]) || c.newest || "A";
+    const opt = pick === "B" ? c.optionB : c.optionA;
+    if (opt.task) tasks.push(opt.task);
+  });
+  return tasks;
+}
+function commitMerge(tasks) {
+  state = { version: 1, tasks, tags: pendingMerge.tags.slice() };
+  normalizeOrders(state.tasks);
+  gcTags(state);
+  localStorage.setItem(KEY, JSON.stringify(state));   // local only — pushed explicitly below
+  render();
+}
+// show the merged result immediately using default picks, so incoming changes appear without waiting
+function applyTentative() { commitMerge(assembleTasks(null)); }
+// finalize with the user's (or default) choices, then push the merged result up
+async function finalizeMerge(choices) {
+  if (!pendingMerge) return;
+  const cloudStamp = pendingMerge.cloudStamp;
+  commitMerge(assembleTasks(choices));
+  pendingMerge = null;
+  await pushNow(cloudStamp);
+}
+
+/* --- push (compare-and-swap) + retry --- */
 function schedulePush() {
   if (!sb || !sbUser) return;
   syncDirty = true;
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(pushNow, 1500);
+  pushTimer = setTimeout(() => pushNow(), 1500);
 }
-async function pushNow() {
+function scheduleRetry() {
+  if (!sb || !sbUser) return;
+  syncDirty = true;
+  retryDelay = Math.min(retryDelay ? retryDelay * 2 : 2000, 60000);
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => pushNow(), retryDelay);
+}
+async function pushNow(expected) {
   if (!sb || !sbUser) return;
   clearTimeout(pushTimer);
-  const { data, error } = await sb.from("matrix_state")
-    .upsert({ user_id: sbUser.id, data: state, updated_at: new Date().toISOString() })
-    .select("updated_at").single();
-  if (error) { flash("Sync failed — changes are saved on this device."); return; }
-  syncDirty = false;
-  localStorage.setItem(SYNC_KEY, data.updated_at);
-}
-function adoptCloud(row) {
-  const s = row.data;
-  if (!s || s.version !== 1 || !Array.isArray(s.tasks) || !Array.isArray(s.tags)) {
-    flash("Sync: cloud copy looks invalid — ignored.");
+  const stamp = iso();
+  const known = expected != null ? expected : localStorage.getItem(SYNC_KEY);
+  let res;
+  if (known == null) {   // no cloud row known yet → insert
+    res = await sb.from("matrix_state")
+      .insert({ user_id: sbUser.id, data: state, updated_at: stamp }).select("updated_at");
+  } else {               // update only if the cloud is still at the version we merged from
+    res = await sb.from("matrix_state").update({ data: state, updated_at: stamp })
+      .eq("user_id", sbUser.id).eq("updated_at", known).select("updated_at");
+  }
+  const { data, error } = res;
+  if (error) {
+    if (error.code === "23505") return pullMerge();   // row already exists → merge instead
+    scheduleRetry();
+    flash("Offline — saved on this device, will sync when back online.");
     return;
   }
-  state = s;
-  gcTags(state);
-  localStorage.setItem(KEY, JSON.stringify(state));   // no schedulePush: this IS the cloud copy
-  localStorage.setItem(SYNC_KEY, row.updated_at);
-  render();
+  if (!data || !data.length) return pullMerge();       // compare-and-swap miss: cloud moved → merge
+  syncDirty = false;
+  retryDelay = 0;
+  clearTimeout(retryTimer);
+  saveBase(state);
+  localStorage.setItem(SYNC_KEY, data[0].updated_at);
 }
+
+/* --- pull + merge --- */
 async function pullMerge() {
-  if (!sb || !sbUser || pulling) return;
+  if (!sb || !sbUser || pulling || syncDlgOpen) return;
   pulling = true;
+  let row, error;
   try {
-    const { data: row, error } = await sb.from("matrix_state").select("data, updated_at").maybeSingle();
-    if (error) return flash("Sync error: " + error.message);
-    if (!row) {                                        // first device on this account
-      if (state.tasks.length) await pushNow(); else localStorage.removeItem(SYNC_KEY);
-      return;
-    }
-    if (JSON.stringify(row.data) === JSON.stringify(state)) {
-      localStorage.setItem(SYNC_KEY, row.updated_at);
-      return;
-    }
-    if (!state.tasks.length) return adoptCloud(row);
-    if (row.updated_at === localStorage.getItem(SYNC_KEY)) return pushNow();  // only we changed
-    const useCloud = confirm(
-      `Your cloud copy (updated ${new Date(row.updated_at).toLocaleString()}) differs from this device.\n\n` +
-      `OK — use the cloud copy here.\nCancel — keep this device's tasks and overwrite the cloud.`);
-    if (useCloud) adoptCloud(row); else await pushNow();
-  } finally { pulling = false; }
+    ({ data: row, error } = await sb.from("matrix_state").select("data, updated_at").maybeSingle());
+  } catch (e) { pulling = false; scheduleRetry(); return; }
+  if (error) { pulling = false; flash("Sync error: " + error.message); return; }
+  if (!row) {                                          // nothing in the cloud yet
+    pulling = false;
+    if (state.tasks.length) await pushNow();
+    else { localStorage.removeItem(SYNC_KEY); localStorage.removeItem(BASE_KEY); }
+    return;
+  }
+  const cloud = row.data;
+  if (!validState(cloud)) { pulling = false; flash("Sync: cloud copy looks invalid — ignored."); return; }
+  if (sameState(cloud, state)) {                       // already identical → just remember the token
+    saveBase(state);
+    localStorage.setItem(SYNC_KEY, row.updated_at);
+    pulling = false;
+    return;
+  }
+  const base = loadBase() || { version: 1, tasks: [], tags: [] };   // no ancestor → union merge (e.g. first sign-in)
+  pendingMerge = { ...mergeStates(base, state, cloud), cloudStamp: row.updated_at };
+  applyTentative();                                    // reflect incoming changes right away
+  pulling = false;
+  if (pendingMerge.conflicts.length) openConflictDlg();
+  else await finalizeMerge(null);
+}
+
+/* --- conflict dialog --- */
+function quadName(t) {
+  const k = (t.urgent == null || t.important == null) ? "un"
+    : (t.urgent ? (t.important ? "q1" : "q3") : (t.important ? "q2" : "q4"));
+  return QUADS[k] ? QUADS[k].name : "Unsorted";
+}
+function fieldDisplay(f, t) {
+  const v = t[f];
+  if (f === "deadline") return v ? fmtDeadline(v) : "none";
+  if (f === "tag") return v || "none";
+  if (f === "starred") return v ? "★ starred" : "not starred";
+  if (f === "parentId") return v ? "nested" : "top level";
+  if (f === "notes") return v ? (v.length > 60 ? v.slice(0, 60) + "…" : v) : "empty";
+  return v == null ? "none" : String(v);
+}
+function fieldDiffsHTML(c) {
+  const rows = [];
+  const diff = (label, a, b) =>
+    `<span class="cfield"><b>${esc(label)}</b> — this device: ${esc(a)} · cloud: ${esc(b)}</span>`;
+  if (c.fields.includes("urgent") || c.fields.includes("important"))
+    rows.push(diff("Quadrant", quadName(c.local), quadName(c.cloud)));
+  c.fields.filter(f => f !== "urgent" && f !== "important").forEach(f =>
+    rows.push(diff(FIELD_LABELS[f] || f, fieldDisplay(f, c.local), fieldDisplay(f, c.cloud))));
+  return rows.join("");
+}
+function conflictRowHTML(c, i) {
+  const what = c.kind === "fields"
+    ? `<div class="cwhat">Edited in both places</div>${fieldDiffsHTML(c)}`
+    : `<div class="cwhat">${c.side === "local"
+        ? "Edited here, deleted on the other device"
+        : "Deleted here, edited on the other device"}</div>`;
+  const opt = (val, o) => `<label class="copt">
+      <input type="radio" name="c${i}" value="${val}">
+      <span><span class="cside">${esc(o.label)}</span>${o.del ? '<span class="cval cdel">removes this task</span>' : ""}</span>
+    </label>`;
+  return `<div class="conflict" data-idx="${i}">
+    <div class="ctitle">${esc(c.title || "(untitled)")}</div>
+    ${what}
+    ${opt("A", c.optionA)}
+    ${opt("B", c.optionB)}
+  </div>`;
+}
+function openConflictDlg() {
+  const conflicts = pendingMerge.conflicts;
+  $("#syncIntro").textContent = (conflicts.length === 1 ? "1 task" : conflicts.length + " tasks")
+    + " changed in two places. Pick which version to keep.";
+  $("#conflictList").innerHTML = conflicts.map(conflictRowHTML).join("");
+  conflicts.forEach((c, i) => {
+    const r = document.querySelector(`input[name="c${i}"][value="${c.newest}"]`);
+    if (r) r.checked = true;
+  });
+  syncDlgOpen = true;
+  $("#syncDlg").showModal();
 }
 
 function authMsg(text) { $("#authMsg").textContent = text; }
@@ -943,8 +1193,8 @@ function renderAuth() {
 
 async function initSync() {
   if (!SUPABASE_URL || !SUPABASE_KEY) return;
-  const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
-  sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+  if (!window.supabase || !window.supabase.createClient) { console.warn("Ike: Supabase library unavailable — running local-only."); return; }
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   $("#syncBtn").hidden = false;
   sb.auth.onAuthStateChange((_e, session) => { sbUser = session ? session.user : null; renderAuth(); });
   const { data: { session } } = await sb.auth.getSession();
@@ -982,8 +1232,34 @@ async function initSync() {
     if (syncDirty) await pushNow();
     await sb.auth.signOut();
     localStorage.removeItem(SYNC_KEY);
+    localStorage.removeItem(BASE_KEY);
     $("#authDlg").close();
     flash("Signed out. Tasks stay on this device.");
+  });
+
+  // conflict dialog: apply the chosen versions, then push the merged result
+  $("#syncForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const conflicts = pendingMerge ? pendingMerge.conflicts : [];
+    const choices = conflicts.map((_, i) => {
+      const r = document.querySelector(`input[name="c${i}"]:checked`);
+      return r ? r.value : "A";
+    });
+    syncDlgOpen = false;
+    $("#syncDlg").close();
+    finalizeMerge(choices);
+  });
+  $("#syncNewest").addEventListener("click", () => {
+    (pendingMerge ? pendingMerge.conflicts : []).forEach((c, i) => {
+      const r = document.querySelector(`input[name="c${i}"][value="${c.newest}"]`);
+      if (r) r.checked = true;
+    });
+  });
+  // dismissing with Esc keeps the tentative (newest / keep) resolution
+  $("#syncDlg").addEventListener("close", () => {
+    if (!syncDlgOpen) return;
+    syncDlgOpen = false;
+    if (pendingMerge) finalizeMerge(null);
   });
 
   // pick up changes made on another device when returning to the tab;
@@ -993,10 +1269,20 @@ async function initSync() {
     if (document.visibilityState === "visible" && !syncDirty) pullMerge();
     else if (document.visibilityState === "hidden" && syncDirty) pushNow();
   });
+  // reconnect: flush pending changes, otherwise pull anything new
+  addEventListener("online", () => {
+    if (!sbUser) return;
+    if (syncDirty) pushNow(); else pullMerge();
+  });
 }
 
 render();
 initSync();
+
+/* ---------- offline app shell ---------- */
+if ("serviceWorker" in navigator) {
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
 </script>
 </body>
 </html>
