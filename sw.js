@@ -13,7 +13,7 @@
  * Bump CACHE when a precached asset other than index.html changes, so the
  * install step re-fetches the shell and the activate step drops the old one.
  */
-const CACHE = "ike-shell-v2";
+const CACHE = "ike-shell-v3";
 const SHELL = [
   "./",
   "index.html",
@@ -24,6 +24,7 @@ const SHELL = [
   "fonts/nunito-latin.woff2",
   "fonts/nunito-latin-ext.woff2",
   "vendor/supabase.js",
+  "icons/favicon-32.png",
   "icons/icon-192.png",
   "icons/icon-512.png",
   "icons/icon-maskable-512.png",
