@@ -128,14 +128,21 @@ details.menu>.panel{
 }
 .card.dragging{opacity:.6; box-shadow:0 14px 30px -12px rgba(56,47,38,.6)}
 .card.dim{opacity:.3}
-.card.nest-hl{outline:2px solid var(--sage); outline-offset:-1px; background:var(--sage-tint)}
+details.subs.nest-hl{outline:2px solid var(--sage); outline-offset:2px; border-radius:8px; background:var(--sage-tint)}
 .card.ins-before{box-shadow:0 -4px 0 0 var(--sage)}
 .card.ins-after{box-shadow:0 4px 0 0 var(--sage)}
-.cards.zone-hl{outline:2px dashed var(--sage); outline-offset:3px; border-radius:10px}
+.quadrant.zone-hl, #unsortedWrap.zone-hl{outline:2px dashed var(--sage); outline-offset:-4px}
 .cardline{display:flex; align-items:center; gap:8px}
 .cardline+.cardline{margin-top:6px}
 .star{color:var(--ochre); flex:0 0 auto}
 .title{flex:1; min-width:0; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.card>.cardline>.title{cursor:pointer}
+.card.expanded>.cardline>.title{white-space:normal; overflow:visible; text-overflow:clip}
+.notes{
+  margin-top:8px; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--ink-2);
+  font-size:.9rem; font-weight:600; border-left:2px solid var(--line); padding-left:10px;
+}
+.card.sub .notes{font-size:.85rem}
 .chip{
   font-size:.7rem; font-weight:800; border-radius:99px; padding:3px 10px; white-space:nowrap;
   text-transform:uppercase; letter-spacing:.5px; flex:0 1 auto; min-width:0;
@@ -148,7 +155,7 @@ details.menu>.panel{
 .chip.plum{background:color-mix(in srgb,var(--plum) 22%,transparent); color:var(--plum)}
 .deadline{font-size:.78rem; color:var(--muted); font-weight:800; white-space:nowrap; flex:0 0 auto}
 .deadline.soon{color:var(--clay)}
-.noteglyph{color:var(--muted); font-size:.8rem; font-weight:800}
+.noteglyph{color:var(--muted); font-size:.8rem; font-weight:800; cursor:pointer}
 .acts{margin-left:auto; display:flex; gap:5px; opacity:0; transition:opacity .12s}
 .card:hover>.cardline>.acts, .card:focus-within>.cardline>.acts{opacity:1}
 @media (hover:none), (max-width:700px){ .acts{opacity:1} }
@@ -197,7 +204,10 @@ details.subs[open]>summary .tri{rotate:90deg}
   box-shadow:var(--shadow); color:var(--ink);
 }
 #moveMenu:popover-open{display:flex}
-#moveMenu button{text-align:left; padding:10px 14px; border-radius:10px; min-height:44px; font-weight:700; transition:background .12s}
+#moveMenu button{text-align:left; padding:10px 14px; border-radius:10px; min-height:44px; font-weight:700;
+  display:flex; align-items:center; gap:10px; transition:background .12s}
+#moveMenu button[aria-current="true"]{background:var(--surface-2)}
+#moveMenu .cur{margin-left:auto; color:var(--sage); font-weight:900}
 #moveMenu button:hover{background:var(--surface-2)}
 
 /* ---------- dialog ---------- */
@@ -455,6 +465,7 @@ let filter = null;          // null | "★" | tag name
 let zoom = null;            // null | "q1".."q4"
 let inArchive = false;
 let openSubs = new Set();   // task ids with expanded subtask lists
+let expanded = new Set();   // task ids showing their full title + notes
 let editingId = null, dlgU = null, dlgI = null;
 let dragId = null, moveId = null;
 
@@ -554,14 +565,23 @@ function render() {
   renderTagMenu();
 }
 
+// the title doubles as the expand toggle: tap it to see the full title and the notes
+function titleHTML(t) {
+  const open = expanded.has(t.id);
+  return `<span class="title" role="button" tabindex="0" aria-expanded="${open}">${esc(t.title)}</span>`;
+}
+function notesHTML(t) {
+  return expanded.has(t.id) && t.notes ? `<div class="notes">${esc(t.notes)}</div>` : "";
+}
 function cardHTML(t) {
   const subs = subsOf(t.id);
   const doneSubs = subs.filter(s => s.completedAt).length;
   const dim = !matchesFilter(t) ? " dim" : "";
-  return `<div class="card${dim}" data-id="${t.id}" draggable="true">
+  const open = expanded.has(t.id) ? " expanded" : "";
+  return `<div class="card${dim}${open}" data-id="${t.id}" draggable="true">
     <div class="cardline">
       ${t.starred ? '<span class="star">★</span>' : ""}
-      <span class="title">${esc(t.title)}</span>
+      ${titleHTML(t)}
     </div>
     <div class="cardline">
       ${t.tag ? `<span class="chip ${tagColor(t.tag)}">${esc(t.tag)}</span>` : ""}
@@ -569,7 +589,8 @@ function cardHTML(t) {
       ${t.notes ? '<span class="noteglyph">¶</span>' : ""}
       ${actsHTML(t)}
     </div>
-    <details class="subs"${openSubs.has(t.id) ? " open" : ""} data-id="${t.id}">
+    ${notesHTML(t)}
+    <details class="subs"${openSubs.has(t.id) ? " open" : ""} data-id="${t.id}" data-zone="p:${t.id}">
       <summary><span class="tri">▶</span> ${subs.length ? `${doneSubs}/${subs.length}` : "subtasks"}</summary>
       <div class="sublist" data-zone="p:${t.id}">${subs.map(subHTML).join("")}</div>
       <input class="addsub" data-parent="${t.id}" placeholder="add subtask" aria-label="Add subtask">
@@ -577,15 +598,17 @@ function cardHTML(t) {
   </div>`;
 }
 function subHTML(t) {
-  return `<div class="card sub${t.completedAt ? " done" : ""}" data-id="${t.id}" draggable="true">
+  const open = expanded.has(t.id) ? " expanded" : "";
+  return `<div class="card sub${t.completedAt ? " done" : ""}${open}" data-id="${t.id}" draggable="true">
     <div class="cardline">
       ${t.starred ? '<span class="star">★</span>' : ""}
-      <span class="title">${esc(t.title)}</span>
+      ${titleHTML(t)}
       ${t.tag ? `<span class="chip ${tagColor(t.tag)}">${esc(t.tag)}</span>` : ""}
       ${t.deadline ? `<span class="deadline${deadlineSoon(t.deadline) ? " soon" : ""}">${fmtDeadline(t.deadline)}</span>` : ""}
       ${t.notes ? '<span class="noteglyph">¶</span>' : ""}
       ${t.completedAt ? '<span class="acts"></span>' : actsHTML(t)}
     </div>
+    ${notesHTML(t)}
   </div>`;
 }
 function actsHTML(t) {
@@ -732,9 +755,20 @@ $("#taskForm").addEventListener("submit", e => {
 });
 
 /* ---------- clicks ---------- */
+function toggleExpand(id) {
+  if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
+  render();
+  const again = document.querySelector(`.card[data-id="${id}"] > .cardline > .title`);
+  if (again) again.focus();
+}
 document.addEventListener("click", e => {
   const btn = e.target.closest("button, .addsub");
   document.querySelectorAll("details.menu[open]").forEach(m => { if (!m.contains(e.target)) m.open = false; });
+
+  const tog = e.target.closest(".title, .noteglyph");
+  const togCard = tog && tog.closest(".card");        // archive rows also use .title — they have no card
+  if (togCard) return toggleExpand(togCard.dataset.id);
+
   if (!btn) return;
 
   if (btn.id === "newBtn") return openDlg(null);
@@ -806,6 +840,11 @@ document.addEventListener("keydown", e => {
     if (again) again.focus();
     return;
   }
+  if ((e.key === "Enter" || e.key === " ") && e.target.classList &&
+      e.target.classList.contains("title") && e.target.closest(".card")) {
+    e.preventDefault();
+    return toggleExpand(e.target.closest(".card").dataset.id);
+  }
   if (e.key === "n" && !e.metaKey && !e.ctrlKey && !e.altKey &&
       !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && !$("#taskDlg").open) {
     e.preventDefault();
@@ -818,9 +857,12 @@ function openMoveMenu(id, anchor) {
   moveId = id;
   const t = byId(id);
   const menu = $("#moveMenu");
-  menu.innerHTML = Object.keys(QUADS).map(k =>
-      `<button data-move-to="${k}">${esc(QUADS[k].name)}</button>`).join("") +
-    `<button data-move-to="un">Unsorted</button>` +
+  const here = t.parentId ? null : quadOf(t);   // a subtask inherits its parent's quadrant
+  const row = (k, label) =>
+    `<button data-move-to="${k}"${k === here ? ' aria-current="true"' : ""}>${esc(label)}` +
+    (k === here ? '<span class="cur">✓</span>' : "") + `</button>`;
+  menu.innerHTML = Object.keys(QUADS).map(k => row(k, QUADS[k].name)).join("") +
+    row("un", "Unsorted") +
     (t.parentId ? `<button data-move-to="detach">Detach from parent</button>` : "");
   menu.showPopover();
   const r = anchor.getBoundingClientRect(), m = menu.getBoundingClientRect();
@@ -833,23 +875,38 @@ function clearDropHints() {
   document.querySelectorAll(".nest-hl, .ins-before, .ins-after, .zone-hl")
     .forEach(el => el.classList.remove("nest-hl", "ins-before", "ins-after", "zone-hl"));
 }
+// The whole quadrant box is a drop target, not just its column of cards: anywhere
+// that is not itself a zone falls back to the .cards list of the box it sits in.
+function zoneUnder(el) {
+  const zone = el.closest("[data-zone]");
+  if (zone) return zone;
+  const box = el.closest(".quadrant, #unsortedWrap");
+  return box ? box.querySelector(".cards") : null;
+}
 function dropTarget(e) {
-  // returns {key, index} for a legal drop, or null
+  // returns {key, index} for a legal drop, or null.
+  // Nesting only happens inside a card's subtask block — dropping on a card body
+  // always reorders, so a cross-quadrant drag can never swallow the task.
   const d = byId(dragId);
-  const zoneEl = e.target.closest("[data-zone]");
+  let zoneEl = zoneUnder(e.target);
   if (!d || !zoneEl) return null;
-  const key = zoneEl.dataset.zone;
-  if (key.startsWith("p:") && !canNest(d, byId(key.slice(2)))) return null;
-  const cards = [...zoneEl.querySelectorAll(":scope > .card")].filter(c => c.dataset.id !== dragId);
-  const over = e.target.closest(".card");
-  if (over && over.dataset.id !== dragId && zoneEl.contains(over) && cards.includes(over)) {
-    const r = over.getBoundingClientRect();
-    const y = (e.clientY - r.top) / r.height;
-    if (y > 0.3 && y < 0.7 && !over.classList.contains("sub") && canNest(d, byId(over.dataset.id)))
-      return { key: "p:" + over.dataset.id, index: null, nestEl: over };
-    return { key, index: cards.indexOf(over) + (y >= 0.5 ? 1 : 0), lineEl: over, after: y >= 0.5 };
+  if (zoneEl.dataset.zone.startsWith("p:") && !canNest(d, byId(zoneEl.dataset.zone.slice(2)))) {
+    // this task can't be nested here (it has subtasks of its own) — treat the drop
+    // as landing on the quadrant that holds the card, rather than rejecting it
+    const box = zoneEl.closest(".quadrant, #unsortedWrap");
+    zoneEl = box && box.querySelector(".cards");
+    if (!zoneEl) return null;
   }
-  return { key, index: cards.length, zoneEl };
+  const key = zoneEl.dataset.zone;
+  const listEl = zoneEl.classList.contains("subs") ? zoneEl.querySelector(".sublist") : zoneEl;
+  const cards = [...listEl.querySelectorAll(":scope > .card")].filter(c => c.dataset.id !== dragId);
+  const over = e.target.closest(".card");
+  if (over && over.dataset.id !== dragId && listEl.contains(over) && cards.includes(over)) {
+    const r = over.getBoundingClientRect();
+    const after = (e.clientY - r.top) / r.height >= 0.5;
+    return { key, index: cards.indexOf(over) + (after ? 1 : 0), lineEl: over, after };
+  }
+  return { key, index: cards.length, zoneEl, boxEl: zoneEl.closest(".quadrant, #unsortedWrap") || zoneEl };
 }
 document.addEventListener("dragstart", e => {
   const card = e.target.closest(".card");
@@ -869,15 +926,20 @@ document.addEventListener("dragover", e => {
   clearDropHints();
   if (!t) return;
   e.preventDefault();
-  if (t.nestEl) t.nestEl.classList.add("nest-hl");
-  else if (t.lineEl) t.lineEl.classList.add(t.after ? "ins-after" : "ins-before");
-  else if (t.zoneEl) t.zoneEl.classList.add("zone-hl");
+  // highlight the subtask block without opening it — opening mid-drag would reflow
+  // the page under the cursor. The drop itself opens it, so the task is never hidden.
+  const subs = t.key.startsWith("p:") &&
+    document.querySelector(`details.subs[data-id="${t.key.slice(2)}"]`);
+  if (subs) subs.classList.add("nest-hl");
+  if (t.lineEl) t.lineEl.classList.add(t.after ? "ins-after" : "ins-before");
+  else if (t.boxEl && !subs) t.boxEl.classList.add("zone-hl");
 });
 document.addEventListener("drop", e => {
   const t = dropTarget(e);
   clearDropHints();
   if (!t) return;
   e.preventDefault();
+  if (t.key.startsWith("p:")) openSubs.add(t.key.slice(2));   // never hide a task inside a closed list
   placeIn(byId(dragId), t.key, t.index);
 });
 
